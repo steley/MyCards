@@ -716,7 +716,9 @@ function drawStats() {
   }).join('');
 
   const total = s.total_cents;
-  const rows = s.by_card.map((c) => `
+  // 只显示当年有消费的卡片（标记无账单等 0 元记录不占行）
+  const cardsWithSpend = s.by_card.filter((c) => c.total > 0);
+  const rows = cardsWithSpend.map((c) => `
     <tr>
       <td><span class="card-name-cell"><span class="dot ${esc(c.color)}"></span>${c.issuer ? `<span class="muted">${esc(c.issuer)} · </span>` : ''}${esc(c.name)}</span></td>
       <td>${fmt(c.total)}</td>
@@ -743,7 +745,7 @@ function drawStats() {
     ${state.statsMonth != null ? monthDetail(s, state.statsMonth) : ''}
     <section class="panel">
       <div class="panel-head"><h2>各卡年度合计</h2></div>
-      ${s.by_card.length ? `<table class="stat-table">
+      ${cardsWithSpend.length ? `<table class="stat-table">
         <thead><tr><th>卡片</th><th>年度合计</th><th>占比</th><th>月均</th></tr></thead>
         <tbody>${rows}<tr class="total-row"><td>合计</td><td>${fmt(total)}</td><td>100%</td><td>${fmt(Math.round(total / 12))}</td></tr></tbody>
       </table>` : `<div class="empty">${s.year} 年暂无账单数据</div>`}

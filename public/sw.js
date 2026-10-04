@@ -3,7 +3,7 @@
 // PWA 静态资源缓存。
 // 注意：任何静态文件（index.html / app.js / style.css / 图标）改动后，
 // 必须把 VERSION 递增一档（v2、v3……）再部署，否则老用户拿不到更新。
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `mycards-static-${VERSION}`;
 const ASSETS = [
   '/',
