@@ -460,11 +460,11 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
   }
   .bills-table tr:last-child { border-bottom: none; }
   .bills-table td { display: block; border-bottom: none; padding: 2px 0; text-align: left; }
-  .bills-table td:nth-child(2) { order: 1; flex: 1 1 auto; min-width: 0; }              /* 卡名 */
-  .bills-table td:nth-child(5) { order: 1; }                                             /* 已还 */
-  .bills-table td:nth-child(1) { order: 2; font-size: 12.5px; color: var(--muted); }    /* 银行 */
-  .bills-table td:nth-child(4) { order: 2; font-size: 12.5px; }                          /* 还款日（恢复显示）*/
-  .bills-table td:nth-child(3) { order: 3; flex: 1 1 100%; }                             /* 金额整行 */
+  .bills-table td:nth-child(2) { order: 1; flex: 1 1 100%; min-width: 0; }              /* 卡名：标题行独占一行 */
+  .bills-table td:nth-child(5) { order: 2; font-size: 12.5px; }                          /* 还款状态 */
+  .bills-table td:nth-child(1) { order: 3; font-size: 12.5px; color: var(--muted); }    /* 银行 */
+  .bills-table td:nth-child(4) { order: 4; font-size: 12.5px; }                          /* 还款日 */
+  .bills-table td:nth-child(3) { order: 5; flex: 1 1 100%; }                             /* 金额整行 */
   .bills-table .amount-input { max-width: none; width: 100%; text-align: left; }
 
   /* 统计表 → 堆叠：卡名整行 + 三个数值一行 */
