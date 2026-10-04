@@ -189,13 +189,7 @@ function drawDashboard(d) {
       </div>
     </div>
     <section class="panel">
-      <div class="panel-head">
-        <h2>还款提醒</h2>
-        <div style="display:flex; gap:8px">
-          <a class="btn" href="/api/export">导出备份</a>
-          <a class="btn btn-primary" href="#/bills">记本月账单</a>
-        </div>
-      </div>
+      <div class="panel-head"><h2>还款提醒</h2></div>
       ${d.due_soon.length
         ? `<ul class="due-list">${d.due_soon.map(dueItem).join('')}</ul>`
         : '<div class="empty">✓ 近 7 天无待还款，也没有逾期</div>'}
