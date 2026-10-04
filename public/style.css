@@ -441,7 +441,49 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
   .stat-cell + .stat-cell { border-left: none; border-top: 1px solid var(--line); }
   .stat-value { font-size: 22px; }
   .form-grid { grid-template-columns: 1fr; }
-  .bills-table th:nth-child(4), .bills-table td:nth-child(4) { display: none; } /* 手机上隐藏还款日列 */
-  .cards-table { display: block; overflow-x: auto; white-space: nowrap; }
+  .panel-head { flex-wrap: wrap; }
+  .btn, .seg button, .card-name-cell, .period-nav b { white-space: nowrap; }
+  .credit-card .cc-num { font-size: 13px; letter-spacing: 2px; white-space: nowrap; overflow: hidden; }
+  .credit-card .cc-bottom { font-size: 12px; }
   .period-nav { flex-wrap: wrap; }
+
+  /* 账单表 → 堆叠卡片式：卡名+已还 / 银行·还款日 / 金额整行 */
+  .bills-table thead { display: none; }
+  .bills-table, .bills-table tbody { display: block; }
+  .bills-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .bills-table tr:last-child { border-bottom: none; }
+  .bills-table td { display: block; border-bottom: none; padding: 2px 0; text-align: left; }
+  .bills-table td:nth-child(2) { order: 1; flex: 1 1 auto; min-width: 0; }              /* 卡名 */
+  .bills-table td:nth-child(5) { order: 1; }                                             /* 已还 */
+  .bills-table td:nth-child(1) { order: 2; font-size: 12.5px; color: var(--muted); }    /* 银行 */
+  .bills-table td:nth-child(4) { order: 2; font-size: 12.5px; }                          /* 还款日（恢复显示）*/
+  .bills-table td:nth-child(3) { order: 3; flex: 1 1 100%; }                             /* 金额整行 */
+  .bills-table .amount-input { max-width: none; width: 100%; text-align: left; }
+
+  /* 统计表 → 堆叠：卡名整行 + 三个数值一行 */
+  .stat-table thead { display: none; }
+  .stat-table, .stat-table tbody { display: block; }
+  .stat-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .stat-table tr:last-child { border-bottom: none; }
+  .stat-table td { display: block; border-bottom: none; padding: 2px 0; }
+  .stat-table td:nth-child(1) { flex: 1 1 100%; }             /* 卡名整行 */
+  .stat-table td:nth-child(2) { flex: 1; }                    /* 年度合计 */
+  .stat-table td:nth-child(3) { flex: 0 0 auto; }             /* 占比 */
+  .stat-table td:nth-child(4) { flex: 1; text-align: right; } /* 月均 */
+
+  .cards-table { display: block; overflow-x: auto; white-space: nowrap; }
 }
