@@ -13,12 +13,16 @@ billRoutes.get('/bills', async (c) => {
   const period = c.req.query('period') ?? today.slice(0, 7);
   if (!PERIOD_RE.test(period)) throw new ApiError(400, 'period 格式应为 YYYY-MM');
 
-  const { results: bills } = await c.env.DB.prepare(
-    `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id
-     WHERE b.period = ? ORDER BY c.id`,
-  ).bind(period).all();
-
-  const { results: cards } = await c.env.DB.prepare('SELECT * FROM cards ORDER BY id').all();
+  // 账单与卡片两条只读查询合并为一次 D1 往返
+  const [billsRes, cardsRes] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id
+       WHERE b.period = ? ORDER BY c.id`,
+    ).bind(period),
+    c.env.DB.prepare('SELECT * FROM cards ORDER BY id'),
+  ]);
+  const bills = billsRes.results as any[];
+  const cards = cardsRes.results as any[];
   const dueDates: Record<number, string | null> = {};
   for (const card of cards as any[]) dueDates[card.id] = computeDueDate(card, period, null);
 
@@ -33,8 +37,13 @@ billRoutes.put('/bills', async (c) => {
   if (!Number.isInteger(cardId)) throw new ApiError(400, 'card_id 无效');
   if (!PERIOD_RE.test(period)) throw new ApiError(400, 'period 格式应为 YYYY-MM');
 
-  const card = await c.env.DB.prepare('SELECT * FROM cards WHERE id=?').bind(cardId).first();
-  if (!card) throw new ApiError(404, '卡片不存在');
+  // 卡片与现有账单合并为一次读取往返
+  const [cardRes, existingRes] = await c.env.DB.batch<any>([
+    c.env.DB.prepare('SELECT * FROM cards WHERE id=?').bind(cardId),
+    c.env.DB.prepare('SELECT * FROM bills WHERE card_id=? AND period=?').bind(cardId, period),
+  ]);
+  if (!cardRes.results.length) throw new ApiError(404, '卡片不存在');
+  const existing = existingRes.results[0] ?? null;
 
   const dueDate = body?.due_date ? String(body.due_date) : null;
   if (dueDate && !YMD_RE.test(dueDate)) throw new ApiError(400, 'due_date 格式应为 YYYY-MM-DD');
@@ -48,7 +57,6 @@ billRoutes.put('/bills', async (c) => {
   const cents = yuanToCents(body.amount);
   if (cents == null) throw new ApiError(400, '金额无效');
 
-  const existing = await c.env.DB.prepare('SELECT * FROM bills WHERE card_id=? AND period=?').bind(cardId, period).first<any>();
   // 还款状态转移（AUDIT-005）：
   //  - 已还总额（含此前部分还款）≥ 新金额 → 视为结清
   //  - 此前有部分还款 → 保留 paid_amount_cents（不再静默清零，包括金额未变的空修改）
@@ -67,20 +75,22 @@ billRoutes.put('/bills', async (c) => {
     paidAt = prevPaidAt;
   }
 
-  if (existing) {
-    await c.env.DB.prepare(
-      'UPDATE bills SET amount_cents=?, due_date=?, note=?, paid=?, paid_amount_cents=?, paid_at=? WHERE id=?',
-    ).bind(cents, dueDate, note, paid, paidCents, paidAt, existing.id).run();
-  } else {
-    await c.env.DB.prepare(
-      'INSERT INTO bills (card_id, period, amount_cents, due_date, note) VALUES (?, ?, ?, ?, ?)',
-    ).bind(cardId, period, cents, dueDate, note).run();
-  }
-  const bill = await c.env.DB.prepare(
-    `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id
-     WHERE b.card_id = ? AND b.period = ?`,
-  ).bind(cardId, period).first();
-  return c.json({ ok: true, bill });
+  // 写入与回读合并为一次往返（batch 同事务顺序执行，回读可见本次写入）
+  const write = existing
+    ? c.env.DB.prepare(
+        'UPDATE bills SET amount_cents=?, due_date=?, note=?, paid=?, paid_amount_cents=?, paid_at=? WHERE id=?',
+      ).bind(cents, dueDate, note, paid, paidCents, paidAt, existing.id)
+    : c.env.DB.prepare(
+        'INSERT INTO bills (card_id, period, amount_cents, due_date, note) VALUES (?, ?, ?, ?, ?)',
+      ).bind(cardId, period, cents, dueDate, note);
+  const [, readBackRes] = await c.env.DB.batch([
+    write,
+    c.env.DB.prepare(
+      `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id
+       WHERE b.card_id = ? AND b.period = ?`,
+    ).bind(cardId, period),
+  ]);
+  return c.json({ ok: true, bill: readBackRes.results[0] });
 });
 
 // 标记还款：{ paid: true/false, paid_amount?: 元 }；传 paid_amount 时按金额自动判断是否结清
@@ -99,10 +109,13 @@ billRoutes.post('/bills/:id/pay', async (c) => {
     paid = 1;
     paidCents = bill.amount_cents;
   }
-  await c.env.DB.prepare('UPDATE bills SET paid=?, paid_amount_cents=?, paid_at=? WHERE id=?')
-    .bind(paid, paidCents, paid ? new Date().toISOString() : null, id).run();
-  const updated = await c.env.DB.prepare(
-    `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id WHERE b.id = ?`,
-  ).bind(id).first();
-  return c.json({ ok: true, bill: updated });
+  // 更新与回读合并为一次往返（batch 同事务，回读可见本次更新）
+  const [, updatedRes] = await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE bills SET paid=?, paid_amount_cents=?, paid_at=? WHERE id=?')
+      .bind(paid, paidCents, paid ? new Date().toISOString() : null, id),
+    c.env.DB.prepare(
+      `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id WHERE b.id = ?`,
+    ).bind(id),
+  ]);
+  return c.json({ ok: true, bill: updatedRes.results[0] });
 });

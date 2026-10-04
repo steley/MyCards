@@ -59,11 +59,13 @@ cardRoutes.get('/cards', async (c) => {
 
 cardRoutes.post('/cards', async (c) => {
   const d = parseCardBody(await c.req.json());
-  const { meta } = await c.env.DB.prepare(INSERT)
-    .bind(d.name, d.issuer, d.last4, d.billing_day, d.due_day, d.due_offset_days, d.credit_limit_cents, d.color, d.note)
-    .run();
-  const card = await c.env.DB.prepare('SELECT * FROM cards WHERE id=?').bind(meta.last_row_id).first();
-  return c.json({ card }, 201);
+  // 插入与回读合并为一次往返；batch 同事务内 last_insert_rowid() 即新卡片 id
+  const [, cardRes] = await c.env.DB.batch([
+    c.env.DB.prepare(INSERT)
+      .bind(d.name, d.issuer, d.last4, d.billing_day, d.due_day, d.due_offset_days, d.credit_limit_cents, d.color, d.note),
+    c.env.DB.prepare('SELECT * FROM cards WHERE id = last_insert_rowid()'),
+  ]);
+  return c.json({ card: cardRes.results[0] }, 201);
 });
 
 cardRoutes.put('/cards/:id', async (c) => {
@@ -73,11 +75,13 @@ cardRoutes.put('/cards/:id', async (c) => {
   const body = await c.req.json();
   const d = parseCardBody(body);
   const archived = body?.archived === undefined ? existing.archived : body?.archived ? 1 : 0;
-  await c.env.DB.prepare(UPDATE)
-    .bind(d.name, d.issuer, d.last4, d.billing_day, d.due_day, d.due_offset_days, d.credit_limit_cents, d.color, d.note, archived, id)
-    .run();
-  const card = await c.env.DB.prepare('SELECT * FROM cards WHERE id=?').bind(id).first();
-  return c.json({ card });
+  // 更新与回读合并为一次往返（batch 同事务，回读可见本次更新）
+  const [, cardRes] = await c.env.DB.batch([
+    c.env.DB.prepare(UPDATE)
+      .bind(d.name, d.issuer, d.last4, d.billing_day, d.due_day, d.due_offset_days, d.credit_limit_cents, d.color, d.note, archived, id),
+    c.env.DB.prepare('SELECT * FROM cards WHERE id=?').bind(id),
+  ]);
+  return c.json({ card: cardRes.results[0] });
 });
 
 // 删除（AUDIT-006）：单语句原子化——无账单才硬删，消除 COUNT→DELETE 竞态窗口；

@@ -11,19 +11,22 @@ statRoutes.get('/dashboard', async (c) => {
   const today = todayYMD(tzOffsetHours(c.env.TZ_OFFSET));
   const period = today.slice(0, 7);
 
-  const monthTotal = await c.env.DB.prepare('SELECT COALESCE(SUM(amount_cents),0) AS t FROM bills WHERE period=?')
-    .bind(period).first<{ t: number }>();
-  const unpaidTotal = await c.env.DB.prepare(
-    'SELECT COALESCE(SUM(amount_cents - paid_amount_cents),0) AS t FROM bills WHERE paid=0',
-  ).first<{ t: number }>();
-  const { results: unpaid } = await c.env.DB.prepare(
-    `SELECT b.id, b.card_id, b.period, b.amount_cents, b.due_date,
-            c.name AS card_name, c.color, c.billing_day, c.due_day, c.due_offset_days
-     FROM bills b JOIN cards c ON c.id = b.card_id WHERE b.paid = 0`,
-  ).all();
+  // 三条只读查询合并为一次 D1 往返（batch 同事务顺序执行），省去逐条等待
+  const [monthTotalRes, unpaidTotalRes, unpaidListRes] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT COALESCE(SUM(amount_cents),0) AS t FROM bills WHERE period=?').bind(period),
+    c.env.DB.prepare('SELECT COALESCE(SUM(amount_cents - paid_amount_cents),0) AS t FROM bills WHERE paid=0'),
+    c.env.DB.prepare(
+      `SELECT b.id, b.card_id, b.period, b.amount_cents, b.due_date,
+              c.name AS card_name, c.color, c.billing_day, c.due_day, c.due_offset_days
+       FROM bills b JOIN cards c ON c.id = b.card_id WHERE b.paid = 0`,
+    ),
+  ]);
+  const monthTotal = monthTotalRes.results[0] as { t: number } | undefined;
+  const unpaidTotal = unpaidTotalRes.results[0] as { t: number } | undefined;
+  const unpaid = unpaidListRes.results as any[];
 
   const dueSoon: any[] = [];
-  for (const row of unpaid as any[]) {
+  for (const row of unpaid) {
     const due = computeDueDate(row, row.period, row.due_date);
     if (!due) continue;
     const days = diffDays(due, today);
@@ -80,10 +83,15 @@ statRoutes.get('/stats', async (c) => {
 
 // 全量 CSV 导出（含 BOM，Excel 直接打开不乱码）
 statRoutes.get('/export', async (c) => {
-  const { results: cards } = await c.env.DB.prepare('SELECT * FROM cards ORDER BY id').all();
-  const { results: bills } = await c.env.DB.prepare(
-    'SELECT b.*, c.name AS card_name FROM bills b JOIN cards c ON c.id = b.card_id ORDER BY b.period, b.card_id',
-  ).all();
+  // 两条只读查询合并为一次 D1 往返
+  const [cardsRes, billsRes] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT * FROM cards ORDER BY id'),
+    c.env.DB.prepare(
+      'SELECT b.*, c.name AS card_name FROM bills b JOIN cards c ON c.id = b.card_id ORDER BY b.period, b.card_id',
+    ),
+  ]);
+  const cards = cardsRes.results as any[];
+  const bills = billsRes.results as any[];
 
   const lines: string[] = ['## 卡片'];
   lines.push(['id', '名称', '发卡行', '尾号', '账单日', '还款日', '账单日+N天', '额度(元)', '颜色', '备注', '已归档', '创建时间'].join(','));
