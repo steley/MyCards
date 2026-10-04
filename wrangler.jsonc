@@ -1,0 +1,45 @@
+// 部署前：运行 `npx wrangler d1 create mycards`，
+// 把返回的 database_id 填到下面，然后按 README 完成剩余步骤。
+{
+	"name": "mycards",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-09-01",
+	"assets": {
+		"directory": "./public",
+		"run_worker_first": [
+			"/api/*"
+		],
+		"not_found_handling": "single-page-application"
+	},
+	// 「今天」按哪个时区计算（用于本月、还款倒计时），北京时间 = 8
+	"vars": {
+		"TZ_OFFSET": "8"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "mycards",
+			"database_id": "8882cfc4-5eaf-4dcb-bf16-6d379953e4ce"
+		}
+	],
+
+	"observability": {
+		"enabled": false,
+		"head_sampling_rate": 1,
+		"redact_query_string": false,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+			"persist": true
+		},
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"persist": true
+		},
+		"issues": {
+			"enabled": true
+		}
+	}
+}

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>信用卡管家</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><rect x=%222%22 y=%225%22 width=%2220%22 height=%2214%22 rx=%222.5%22 fill=%22%233556e0%22/><rect x=%222%22 y=%229%22 width=%2220%22 height=%223%22 fill=%22%23000f3a%22 opacity=%22.5%22/><rect x=%225%22 y=%2214.5%22 width=%226%22 height=%221.8%22 rx=%22.9%22 fill=%22white%22 opacity=%22.85%22/></svg>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div id="login" class="login-wrap hidden">
+  <form id="login-form" class="login-card">
+    <h1><svg class="logo" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5" fill="#3556e0"/><rect x="2" y="9" width="20" height="3" fill="#000f3a" opacity=".5"/><rect x="5" y="14.5" width="6" height="1.8" rx=".9" fill="white" opacity=".85"/></svg> 信用卡管家</h1>
+    <p class="muted">个人账单记录与还款提醒</p>
+    <input id="password" type="password" placeholder="访问密码" autocomplete="current-password" required>
+    <button type="submit" class="btn btn-primary btn-block">进入</button>
+    <p id="login-error" class="error hidden"></p>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="brand"><svg class="logo" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5" fill="#3556e0"/><rect x="2" y="9" width="20" height="3" fill="#000f3a" opacity=".5"/><rect x="5" y="14.5" width="6" height="1.8" rx=".9" fill="white" opacity=".85"/></svg> <span>信用卡管家</span></div>
+    <nav id="nav">
+      <a href="#/dashboard" data-view="dashboard">仪表盘</a>
+      <a href="#/cards" data-view="cards">卡片</a>
+      <a href="#/bills" data-view="bills">账单</a>
+      <a href="#/stats" data-view="stats">统计</a>
+    </nav>
+    <button id="logout" class="btn-ghost" type="button">退出</button>
+  </header>
+  <main id="view"></main>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast" class="hidden"></div>
+<script src="/app.js"></script>
+</body>
+</html>
