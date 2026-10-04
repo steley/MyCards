@@ -29,7 +29,10 @@ billRoutes.get('/bills', async (c) => {
   return c.json({ period, today, bills, dueDates });
 });
 
-// 录入 / 修改某卡某月账单；amount 为空表示删除该条记录
+// 录入 / 修改某卡某月账单：
+//  - amount 为空且未显式传 no_bill → 删除该条记录
+//  - no_bill=true → 标记本月无账单（金额清零）
+//  - no_bill=false 且 amount 为空 → 取消无账单标记，回到「未录入」（删除记录）
 billRoutes.put('/bills', async (c) => {
   const body = await c.req.json();
   const cardId = Number(body?.card_id);
@@ -48,10 +51,29 @@ billRoutes.put('/bills', async (c) => {
   const dueDate = body?.due_date ? String(body.due_date) : null;
   if (dueDate && !YMD_RE.test(dueDate)) throw new ApiError(400, 'due_date 格式应为 YYYY-MM-DD');
   const note = String(body?.note ?? '').slice(0, 200);
+  const noBill = body?.no_bill === true;
 
   if (body?.amount == null || body?.amount === '') {
-    await c.env.DB.prepare('DELETE FROM bills WHERE card_id=? AND period=?').bind(cardId, period).run();
-    return c.json({ ok: true, deleted: true });
+    if (!noBill) {
+      // 普通清空（或取消「无账单」标记）：删除记录，回到「未录入」
+      await c.env.DB.prepare('DELETE FROM bills WHERE card_id=? AND period=?').bind(cardId, period).run();
+      return c.json({ ok: true, deleted: true });
+    }
+    // 标记无账单：金额与还款状态一并清零
+    const write = existing
+      ? c.env.DB.prepare(
+          'UPDATE bills SET amount_cents=0, paid=0, paid_amount_cents=0, paid_at=NULL, no_bill=1 WHERE id=?',
+        ).bind(existing.id)
+      : c.env.DB.prepare('INSERT INTO bills (card_id, period, amount_cents, no_bill) VALUES (?, ?, 0, 1)')
+          .bind(cardId, period);
+    const [, readBackRes] = await c.env.DB.batch([
+      write,
+      c.env.DB.prepare(
+        `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id
+         WHERE b.card_id = ? AND b.period = ?`,
+      ).bind(cardId, period),
+    ]);
+    return c.json({ ok: true, bill: readBackRes.results[0] });
   }
 
   const cents = yuanToCents(body.amount);
@@ -78,7 +100,7 @@ billRoutes.put('/bills', async (c) => {
   // 写入与回读合并为一次往返（batch 同事务顺序执行，回读可见本次写入）
   const write = existing
     ? c.env.DB.prepare(
-        'UPDATE bills SET amount_cents=?, due_date=?, note=?, paid=?, paid_amount_cents=?, paid_at=? WHERE id=?',
+        'UPDATE bills SET amount_cents=?, due_date=?, note=?, paid=?, paid_amount_cents=?, paid_at=?, no_bill=0 WHERE id=?',
       ).bind(cents, dueDate, note, paid, paidCents, paidAt, existing.id)
     : c.env.DB.prepare(
         'INSERT INTO bills (card_id, period, amount_cents, due_date, note) VALUES (?, ?, ?, ?, ?)',

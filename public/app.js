@@ -199,6 +199,12 @@ function drawDashboard(d) {
       ${d.due_soon.length
         ? `<ul class="due-list">${d.due_soon.map(dueItem).join('')}</ul>`
         : '<div class="empty">✓ 近 7 天无待还款，也没有逾期</div>'}
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>记账提醒</h2></div>
+      ${d.to_record?.length
+        ? `<ul class="due-list">${d.to_record.map(recordItem).join('')}</ul>`
+        : '<div class="empty">✓ 暂无待录入的账单</div>'}
     </section>`;
 
   // 勾选即标记还款：写库后刷新仪表盘（条目移出提醒列表），账单页进入时自动同步勾选
@@ -215,6 +221,43 @@ function drawDashboard(d) {
       }
     };
   });
+
+  // 记账提醒：输入金额即写入当月账单，与「账单」页同一份数据
+  document.querySelectorAll('[data-record]').forEach((input) => {
+    input.onchange = async () => {
+      const raw = input.value.trim();
+      if (raw === '') return;
+      if (!/^\d*\.?\d*$/.test(raw) || Number(raw) < 0) { toast('金额无效', true); input.value = ''; return; }
+      try {
+        await api('/api/bills', {
+          method: 'PUT',
+          body: JSON.stringify({ card_id: Number(input.dataset.record), period: d.period, amount: Number(raw) }),
+        });
+        writeSeq.bills++;
+        toast('已保存，可在「账单」页查看');
+        refreshDashboard(); // 录入后该卡片移出提醒列表
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+  });
+
+  // 记账提醒：本月无账单的卡片点「无账单」，账单页同步显示状态
+  document.querySelectorAll('[data-nobill]').forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        await api('/api/bills', {
+          method: 'PUT',
+          body: JSON.stringify({ card_id: Number(btn.dataset.nobill), period: d.period, no_bill: true }),
+        });
+        writeSeq.bills++;
+        toast('已标记为无账单');
+        refreshDashboard(); // 标记后该卡片移出提醒列表
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+  });
 }
 
 function dueItem(b) {
@@ -227,6 +270,20 @@ function dueItem(b) {
       </div>
       ${dueBadge(b.days)}
       <label class="due-pay"><input type="checkbox" data-pay="${b.id}"> 已还款</label>
+    </li>`;
+}
+
+function recordItem(c) {
+  return `
+    <li class="due-item">
+      <span class="dot ${esc(c.color)}"></span>
+      <div>
+        <b>${esc(c.name)}</b>
+        <small>${esc(c.issuer) ? esc(c.issuer) + ' · ' : ''}账单日 ${c.billing_day} 日 · 请录入本月账单金额</small>
+      </div>
+      <input class="amount-input record-input" type="number" min="0" step="0.01" inputmode="decimal"
+             placeholder="金额（元）" data-record="${c.id}">
+      <button class="btn" data-nobill="${c.id}">无账单</button>
     </li>`;
 }
 
@@ -493,18 +550,21 @@ function drawBills() {
   const rows = visibleCards.map((c) => {
     const bill = billsByCard.get(c.id);
     const due = bill?.due_date || data.dueDates[c.id];
-    const dueCls = bill && !bill.paid && due ? (due < today ? 'overdue' : diffDaysLocal(due, today) <= 7 ? 'soon' : '') : '';
+    const dueCls = bill && !bill.paid && !bill.no_bill && due ? (due < today ? 'overdue' : diffDaysLocal(due, today) <= 7 ? 'soon' : '') : '';
+    const noBill = !!bill?.no_bill;
     return `
     <tr data-card="${c.id}">
       <td>${esc(c.issuer) || '—'}</td>
       <td><span class="card-name-cell"><span class="dot ${esc(c.color)}"></span>${esc(c.name)}${c.archived ? ' <span class="badge yellow" style="font-size:11px">已归档</span>' : ''}</span></td>
       <td><input class="amount-input" type="number" min="0" step="0.01" inputmode="decimal"
-                 placeholder="—" value="${bill ? toYuanInput(bill.amount_cents) : ''}"></td>
+                 placeholder="—" value="${bill && !noBill ? toYuanInput(bill.amount_cents) : ''}" ${noBill ? 'disabled' : ''}></td>
       <td class="due-cell ${dueCls}">${due ? esc(due) : '—'}</td>
       <td class="pay-cell">${
-        bill
-          ? `<label><input type="checkbox" data-act="pay" ${bill.paid ? 'checked' : ''}> 已还${bill.paid ? ` <span class="paid-tag">✓</span>` : ''}</label>`
-          : '<span class="muted" style="font-size:12.5px">未录入</span>'
+        noBill
+          ? `<span class="badge plain">无账单</span><button class="btn" data-act="nobill-off" title="取消无账单标记">取消</button>`
+          : bill
+            ? `<label><input type="checkbox" data-act="pay" ${bill.paid ? 'checked' : ''}> 已还${bill.paid ? ` <span class="paid-tag">✓</span>` : ''}</label>`
+            : '<span class="muted" style="font-size:12.5px">未录入</span>'
       }</td>
     </tr>`;
   }).join('');
@@ -531,7 +591,7 @@ function drawBills() {
         <thead><tr><th>银行</th><th>卡片</th><th>账单金额（元）</th><th>还款日</th><th>已还</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>` : '<div class="empty">请先在「卡片」页添加信用卡</div>'}
-      <p class="muted" style="font-size:12.5px; margin:12px 0 0">金额输入后自动保存；清空即删除该月记录。勾选「已还」后不再提醒。</p>
+      <p class="muted" style="font-size:12.5px; margin:12px 0 0">金额输入后自动保存；清空即删除该月记录。勾选「已还」后不再提醒；本月没有账单的卡片在「仪表盘 → 记账提醒」标记「无账单」。</p>
     </section>`;
 
   $('[data-act="prev"]').onclick = () => { state.billPeriod = periodShift(period, -1); renderBills(); };
@@ -584,6 +644,16 @@ function drawBills() {
         data.bills = data.bills.map((b) => (b.id === r.bill.id ? r.bill : b));
         writeSeq.bills++;
         toast(pay.checked ? '已标记还款 🎉' : '已标记为未还');
+        drawBills();
+      } catch (err) { toast(err.message, true); }
+    };
+    const nobillOff = $('[data-act="nobill-off"]', tr);
+    if (nobillOff) nobillOff.onclick = async () => {
+      try {
+        await api('/api/bills', { method: 'PUT', body: JSON.stringify({ card_id: cardId, period, no_bill: false }) });
+        data.bills = data.bills.filter((b) => b.card_id !== cardId);
+        writeSeq.bills++;
+        toast('已取消无账单标记');
         drawBills();
       } catch (err) { toast(err.message, true); }
     };

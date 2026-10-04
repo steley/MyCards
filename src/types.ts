@@ -30,6 +30,7 @@ export type BillRow = {
   paid: number;
   paid_amount_cents: number;
   paid_at: string | null;
+  no_bill: number;
   note: string;
   created_at: string;
 };

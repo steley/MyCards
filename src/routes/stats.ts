@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { ApiError } from '../types';
-import { computeDueDate, csvEscape, diffDays, todayYMD, tzOffsetHours } from '../util';
+import { computeDueDate, csvEscape, daysInMonth, diffDays, pad2, todayYMD, tzOffsetHours } from '../util';
 
 type App = Hono<{ Bindings: Env['Bindings'] }>;
 
@@ -11,15 +11,20 @@ statRoutes.get('/dashboard', async (c) => {
   const today = todayYMD(tzOffsetHours(c.env.TZ_OFFSET));
   const period = today.slice(0, 7);
 
-  // 三条只读查询合并为一次 D1 往返（batch 同事务顺序执行），省去逐条等待
-  const [monthTotalRes, unpaidTotalRes, unpaidListRes] = await c.env.DB.batch([
+  // 五条只读查询合并为一次 D1 往返（batch 同事务顺序执行），省去逐条等待
+  const [monthTotalRes, unpaidTotalRes, unpaidListRes, recCardsRes, recBillsRes] = await c.env.DB.batch([
     c.env.DB.prepare('SELECT COALESCE(SUM(amount_cents),0) AS t FROM bills WHERE period=?').bind(period),
-    c.env.DB.prepare('SELECT COALESCE(SUM(amount_cents - paid_amount_cents),0) AS t FROM bills WHERE paid=0'),
+    c.env.DB.prepare('SELECT COALESCE(SUM(amount_cents - paid_amount_cents),0) AS t FROM bills WHERE paid=0 AND no_bill=0'),
     c.env.DB.prepare(
       `SELECT b.id, b.card_id, b.period, b.amount_cents, b.due_date,
               c.name AS card_name, c.color, c.billing_day, c.due_day, c.due_offset_days
-       FROM bills b JOIN cards c ON c.id = b.card_id WHERE b.paid = 0`,
+       FROM bills b JOIN cards c ON c.id = b.card_id WHERE b.paid = 0 AND b.no_bill = 0`,
     ),
+    // 记账提醒：本月账单日已到的活跃卡片 + 本期已录入账单的卡片（用于剔除）
+    c.env.DB.prepare(
+      'SELECT id, name, issuer, color, billing_day FROM cards WHERE archived = 0 AND billing_day IS NOT NULL',
+    ),
+    c.env.DB.prepare('SELECT card_id FROM bills WHERE period = ?').bind(period),
   ]);
   const monthTotal = monthTotalRes.results[0] as { t: number } | undefined;
   const unpaidTotal = unpaidTotalRes.results[0] as { t: number } | undefined;
@@ -39,12 +44,25 @@ statRoutes.get('/dashboard', async (c) => {
   }
   dueSoon.sort((a, b) => a.due_date.localeCompare(b.due_date));
 
+  // 记账提醒：账单日当天起，提醒录入本月账单；已录入（含无账单标记）的卡片不再提醒
+  const recorded = new Set((recBillsRes.results as any[]).map((r) => r.card_id));
+  const year = Number(period.slice(0, 4));
+  const month = Number(period.slice(5, 7));
+  const toRecord = (recCardsRes.results as any[])
+    .map((card) => {
+      const day = Math.min(card.billing_day, daysInMonth(year, month));
+      return { ...card, statement_date: `${period}-${pad2(day)}` };
+    })
+    .filter((card) => !recorded.has(card.id) && diffDays(today, card.statement_date) >= 0)
+    .sort((a, b) => a.statement_date.localeCompare(b.statement_date));
+
   return c.json({
     today,
     period,
     month_total_cents: monthTotal?.t ?? 0,
     unpaid_total_cents: unpaidTotal?.t ?? 0,
     due_soon: dueSoon,
+    to_record: toRecord,
   });
 });
 
@@ -103,11 +121,11 @@ statRoutes.get('/export', async (c) => {
   }
   lines.push('');
   lines.push('## 账单');
-  lines.push(['id', '账单期', '卡片', '金额(元)', '还款日', '已还清', '已还金额(元)', '还款时间', '备注'].join(','));
+  lines.push(['id', '账单期', '卡片', '金额(元)', '还款日', '已还清', '已还金额(元)', '还款时间', '无账单', '备注'].join(','));
   for (const b of bills as any[]) {
     lines.push([
       b.id, b.period, b.card_name, b.amount_cents / 100, b.due_date ?? '',
-      b.paid ? '是' : '否', b.paid_amount_cents / 100, b.paid_at ?? '', b.note ?? '',
+      b.paid ? '是' : '否', b.paid_amount_cents / 100, b.paid_at ?? '', b.no_bill ? '是' : '否', b.note ?? '',
     ].map(csvEscape).join(','));
   }
 

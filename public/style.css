@@ -215,6 +215,7 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
 .badge.orange { background: color-mix(in srgb, var(--orange) 15%, transparent); color: var(--orange); }
 .badge.yellow { background: color-mix(in srgb, var(--yellow) 16%, transparent); color: var(--yellow); }
 .badge.green { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+.badge.plain { background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
 
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .dot.blue { background: #3556e0; } .dot.violet { background: #7c3aed; }
@@ -399,7 +400,12 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
 .due-cell.overdue { color: var(--red); font-weight: 600; }
 .pay-cell { white-space: nowrap; text-align: center; }
 .pay-cell input { width: 16px; height: 16px; accent-color: var(--green); cursor: pointer; }
+.pay-cell .btn { padding: 3px 10px; font-size: 12.5px; border-radius: 8px; margin-left: 6px; }
 .paid-tag { color: var(--green); font-size: 12.5px; }
+
+/* 仪表盘「记账提醒」的金额输入与无账单按钮 */
+.record-input { width: 120px; flex: none; }
+.due-item .btn { padding: 4px 11px; font-size: 13px; border-radius: 8px; }
 
 /* ---------- 统计 ---------- */
 .chart {

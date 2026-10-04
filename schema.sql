@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS bills (
   paid INTEGER NOT NULL DEFAULT 0,             -- 是否已还清
   paid_amount_cents INTEGER NOT NULL DEFAULT 0,
   paid_at TEXT,                                -- 标记还款的时间
+  no_bill INTEGER NOT NULL DEFAULT 0,          -- 1 = 本月无账单（已有旧库需执行 migrations/0001_add_no_bill.sql）
   note TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(card_id, period),
