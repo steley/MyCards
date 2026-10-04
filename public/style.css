@@ -300,6 +300,59 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
 /* ---------- 账单录入 ---------- */
 .period-nav { display: flex; align-items: center; gap: 10px; }
 .period-nav b { font-size: 17px; min-width: 92px; text-align: center; }
+/* 年月选择面板（中文格式：年份下拉可选 + 12 月格点选） */
+.period-wrap { position: relative; display: inline-block; }
+.period-btn {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.period-btn:hover { border-color: var(--line); }
+.period-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  width: 248px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 12px;
+}
+.pp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.pp-row select { width: auto; font-weight: 600; padding: 6px 8px; }
+.pp-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pp-grid button {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.pp-grid button:hover { border-color: var(--accent); color: var(--accent); }
+.pp-grid button.on { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+/* 仪表盘「已还款」勾选（勾选后账单页同步） */
+.due-pay {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.due-pay input { width: 15px; height: 15px; accent-color: var(--green); cursor: pointer; }
 .bills-table { width: 100%; border-collapse: collapse; }
 .bills-table th {
   text-align: center;
@@ -384,10 +437,10 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
 .stat-table th, .stat-table td { text-align: center; padding: 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .stat-table th { font-size: 12.5px; color: var(--muted); font-weight: 500; font-variant-numeric: normal; }
 .stat-table tr:last-child td { border-bottom: none; }
-/* 合计行（AUDIT 后新增）：主题色淡染 + 向下渐入，与上方行自然过渡 */
+/* 合计行：浅灰底区分（不用渐变） */
 .stat-table tbody tr.total-row,
 .stat-table tbody tr.total-row:hover {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-weak) 30%, transparent), var(--accent-weak));
+  background: color-mix(in srgb, var(--text) 6%, var(--panel));
 }
 .total-row td { font-weight: 700; }
 
@@ -451,6 +504,7 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
   .credit-card .cc-num { font-size: 13px; letter-spacing: 2px; white-space: nowrap; overflow: hidden; }
   .credit-card .cc-bottom { font-size: 12px; }
   .period-nav { flex-wrap: wrap; }
+  .due-pay { font-size: 12px; }
 
   /* 账单表 → 堆叠卡片式：卡名+已还 / 银行·还款日 / 金额整行 */
   .bills-table thead { display: none; }

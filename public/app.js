@@ -192,6 +192,21 @@ function drawDashboard(d) {
         ? `<ul class="due-list">${d.due_soon.map(dueItem).join('')}</ul>`
         : '<div class="empty">✓ 近 7 天无待还款，也没有逾期</div>'}
     </section>`;
+
+  // 勾选即标记还款：写库后刷新仪表盘（条目移出提醒列表），账单页进入时自动同步勾选
+  document.querySelectorAll('[data-pay]').forEach((cb) => {
+    cb.onchange = async () => {
+      try {
+        await api(`/api/bills/${cb.dataset.pay}/pay`, { method: 'POST', body: JSON.stringify({ paid: cb.checked }) });
+        writeSeq.bills++;
+        toast(cb.checked ? '已标记还款 🎉' : '已取消还款标记');
+        refreshDashboard();
+      } catch (err) {
+        toast(err.message, true);
+        cb.checked = !cb.checked;
+      }
+    };
+  });
 }
 
 function dueItem(b) {
@@ -203,6 +218,7 @@ function dueItem(b) {
         <small>${esc(b.period)} 账单 · 应还 ${fmt(b.amount_cents)} · ${esc(b.due_date)}</small>
       </div>
       ${dueBadge(b.days)}
+      <label class="due-pay"><input type="checkbox" data-pay="${b.id}"> 已还款</label>
     </li>`;
 }
 
@@ -490,10 +506,18 @@ function drawBills() {
       <div class="panel-head">
         <div class="period-nav">
           <button class="btn" data-act="prev">‹</button>
-          <b>${esc(period)}</b>
+          <div class="period-wrap">
+            <button class="period-btn" id="period-btn">${esc(period.slice(0, 4))}年${Number(period.slice(5, 7))}月</button>
+            <div class="period-pop hidden" id="period-pop">
+              <div class="pp-row">
+                <select id="pp-year" aria-label="选择年份"></select>
+                <span class="muted" style="font-size:12px">选择年 · 月</span>
+              </div>
+              <div class="pp-grid" id="pp-grid"></div>
+            </div>
+          </div>
           <button class="btn" data-act="next">›</button>
         </div>
-        <button class="btn" data-act="copy">从上月复制</button>
       </div>
       ${visibleCards.length ? `<table class="bills-table">
         <thead><tr><th>银行</th><th>卡片</th><th>账单金额（元）</th><th>还款日</th><th>已还</th></tr></thead>
@@ -505,26 +529,23 @@ function drawBills() {
   $('[data-act="prev"]').onclick = () => { state.billPeriod = periodShift(period, -1); renderBills(); };
   $('[data-act="next"]').onclick = () => { state.billPeriod = periodShift(period, 1); renderBills(); };
 
-  $('[data-act="copy"]').onclick = async () => {
-    try {
-      const prev = await api(`/api/bills?period=${periodShift(period, -1)}`);
-      const prevMap = new Map(prev.bills.map((b) => [b.card_id, b]));
-      let n = 0;
-      for (const c of visibleCards) {
-        if (data.bills.some((b) => b.card_id === c.id)) continue;  // 本月已录入的跳过
-        const src = prevMap.get(c.id);
-        if (!src) continue;
-        const r = await api('/api/bills', {
-          method: 'PUT',
-          body: JSON.stringify({ card_id: c.id, period, amount: src.amount_cents / 100 }),
-        });
-        if (r.bill) data.bills = [...data.bills, r.bill];
-        n++;
-      }
-      if (n) { writeSeq.bills++; toast(`已带入 ${n} 笔上月账单`); drawBills(); }
-      else toast('上月没有可复制的账单');
-    } catch (err) { toast(err.message, true); }
-  };
+  // 中文年月选择面板：年份下拉直接选 + 12 月格点选
+  const [curY, curM] = period.split('-').map(Number);
+  const todayYear = Number((data.today || '').slice(0, 4)) || curY;
+  let yearOpts = '';
+  for (let y = todayYear - 5; y <= todayYear + 1; y++) {
+    yearOpts += `<option value="${y}" ${y === curY ? 'selected' : ''}>${y}年</option>`;
+  }
+  $('#pp-year').innerHTML = yearOpts;
+  $('#pp-grid').innerHTML = Array.from({ length: 12 }, (_, i) =>
+    `<button class="${i + 1 === curM ? 'on' : ''}" data-m="${i + 1}">${i + 1}月</button>`).join('');
+
+  const setPeriod = (p) => { state.billPeriod = p; renderBills(); };
+  $('#period-btn').onclick = () => $('#period-pop').classList.toggle('hidden');
+  $('#pp-year').onchange = () => setPeriod(`${$('#pp-year').value}-${String(curM).padStart(2, '0')}`);
+  document.querySelectorAll('#pp-grid button').forEach((b) => {
+    b.onclick = () => setPeriod(`${$('#pp-year').value}-${String(b.dataset.m).padStart(2, '0')}`);
+  });
 
   document.querySelectorAll('tr[data-card]').forEach((tr) => {
     const cardId = Number(tr.dataset.card);
@@ -671,6 +692,14 @@ function drawStats() {
 $('#login-form').addEventListener('submit', onLogin);
 $('#logout').addEventListener('click', onLogout);
 window.addEventListener('hashchange', route);
+
+// 点击面板外部时收起年月选择面板
+document.addEventListener('click', (e) => {
+  const pop = $('#period-pop');
+  if (pop && !pop.classList.contains('hidden') && !e.target.closest('.period-wrap')) {
+    pop.classList.add('hidden');
+  }
+});
 
 (async function init() {
   try {
