@@ -56,21 +56,6 @@ npm run dev             # 启动 http://localhost:8787
 
 > D1 数据存在 Cloudflare，免费额度（每天 500 万行读、10 万行写）对个人使用绰绰有余，但建议定期导出备份。
 
-## 升级（2026-10 安全修复）
-
-已部署旧版本的话，更新代码后需要两步：
-
-```bash
-# 1. 应用新表（登录限速表；IF NOT EXISTS 幂等，不影响现有数据）
-npx wrangler d1 execute mycards --remote --file=schema.sql
-# 2. 重新部署
-npx wrangler deploy
-```
-
-- **登录限速**：同一 IP 5 次失败锁定 15 分钟（返回 429 + Retry-After），成功登录自动清零
-- **会话密钥轮换**：签名密钥改为从密码派生（HKDF），部署后所有旧会话失效，**需重新登录一次**
-- 前端日期口径与后端统一（由服务端下发「今天」），无感升级
-
 ## 安全说明
 
 - 所有 `/api` 接口都需要登录；密码以 Cloudflare Secret 形式存储，不会出现在代码或配置里
