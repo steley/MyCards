@@ -38,10 +38,18 @@ function toast(msg, isError = false) {
 let loggedIn = false;
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...opts,
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+  } catch {
+    // 服务器不可达（系统断网或网络故障）：navigator.onLine 感知不到后者
+    $('#offline-banner').classList.remove('hidden');
+    throw new Error('网络不可用');
+  }
+  $('#offline-banner').classList.add('hidden');
   if (res.status === 401 && path !== '/api/login') {
     loggedIn = false;
     showLogin();
@@ -700,6 +708,51 @@ document.addEventListener('click', (e) => {
     pop.classList.add('hidden');
   }
 });
+
+/* ================= PWA ================= */
+const offlineBanner = $('#offline-banner');
+function syncOfflineBanner() {
+  offlineBanner.classList.toggle('hidden', navigator.onLine);
+}
+window.addEventListener('online', () => {
+  syncOfflineBanner();
+  toast('已恢复网络');
+});
+window.addEventListener('offline', syncOfflineBanner);
+syncOfflineBanner();
+
+// 「发现新版本」横幅：新 SW 安装完成后提示，点击后接管页面并自动刷新
+function showUpdateBanner(sw) {
+  const el = $('#update-banner');
+  if (!el.classList.contains('hidden')) return;
+  el.classList.remove('hidden');
+  el.onclick = () => sw.postMessage('SKIP_WAITING');
+}
+
+let reloading = false;
+navigator.serviceWorker?.addEventListener('controllerchange', () => {
+  if (reloading) return;
+  reloading = true;
+  location.reload();
+});
+
+// localhost 开发时不注册 SW，避免缓存干扰调试；updateViaCache 保证每次都拿到最新 sw.js
+if (
+  'serviceWorker' in navigator &&
+  !['localhost', '127.0.0.1'].includes(location.hostname)
+) {
+  navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((reg) => {
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener('statechange', () => {
+        // 首次安装时没有旧 SW 接管，会自动激活，无需提示
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(sw);
+      });
+    });
+  }).catch(() => { /* SW 注册失败不影响正常使用 */ });
+}
 
 (async function init() {
   try {

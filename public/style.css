@@ -489,6 +489,27 @@ label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px
 }
 #toast.error { background: var(--red); }
 
+/* ---------- PWA 横幅 ---------- */
+.banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 14px;
+  z-index: 98;
+  white-space: nowrap;
+}
+#offline-banner { background: #5b6478; color: #fff; }
+#update-banner {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
 /* ---------- 移动端 ---------- */
 @media (max-width: 640px) {
   .topbar { padding: 8px 12px; gap: 8px; }
