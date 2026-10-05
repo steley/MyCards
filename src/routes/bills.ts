@@ -5,6 +5,10 @@ import { PERIOD_RE, YMD_RE, computeDueDate, todayYMD, tzOffsetHours, yuanToCents
 
 type App = Hono<{ Bindings: Env['Bindings'] }>;
 
+// 写入后按 card_id+period 回读账单（batch 同事务，回读可见本次写入）
+const READBACK_SQL = `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id
+  WHERE b.card_id = ? AND b.period = ?`;
+
 export const billRoutes: App = new Hono();
 
 billRoutes.get('/bills', async (c) => {
@@ -68,10 +72,7 @@ billRoutes.put('/bills', async (c) => {
           .bind(cardId, period);
     const [, readBackRes] = await c.env.DB.batch([
       write,
-      c.env.DB.prepare(
-        `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id
-         WHERE b.card_id = ? AND b.period = ?`,
-      ).bind(cardId, period),
+      c.env.DB.prepare(READBACK_SQL).bind(cardId, period),
     ]);
     return c.json({ ok: true, bill: readBackRes.results[0] });
   }
@@ -107,10 +108,7 @@ billRoutes.put('/bills', async (c) => {
       ).bind(cardId, period, cents, dueDate, note);
   const [, readBackRes] = await c.env.DB.batch([
     write,
-    c.env.DB.prepare(
-      `SELECT b.*, c.name AS card_name, c.color FROM bills b JOIN cards c ON c.id = b.card_id
-       WHERE b.card_id = ? AND b.period = ?`,
-    ).bind(cardId, period),
+    c.env.DB.prepare(READBACK_SQL).bind(cardId, period),
   ]);
   return c.json({ ok: true, bill: readBackRes.results[0] });
 });

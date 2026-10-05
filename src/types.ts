@@ -21,20 +21,6 @@ export type CardRow = {
   created_at: string;
 };
 
-export type BillRow = {
-  id: number;
-  card_id: number;
-  period: string;
-  amount_cents: number;
-  due_date: string | null;
-  paid: number;
-  paid_amount_cents: number;
-  paid_at: string | null;
-  no_bill: number;
-  note: string;
-  created_at: string;
-};
-
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);

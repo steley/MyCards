@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { ApiError } from '../types';
 import { computeDueDate, csvEscape, daysInMonth, diffDays, pad2, todayYMD, tzOffsetHours } from '../util';
 
 type App = Hono<{ Bindings: Env['Bindings'] }>;
