@@ -87,6 +87,7 @@ npx wrangler secret put CRON_TOKEN
 
 注意事项：
 
+- RAM 授权 `AliyunDirectMailFullAccess` 时，**资源范围必须选「账号级别」**——选「资源组级别」时，DirectMail 的资源不属于任何资源组，子账号调 API 会一直 403 Forbidden
 - GitHub 定时任务在高峰期可能延迟几分钟，属官方已知行为
 - 仓库 **60 天无任何活动** GitHub 会自动停用定时任务并发邮件提醒，访问仓库重新启用即可
 - 不想发逾期账单的话，把 `src/notify.ts` 里的 `if (days > 2) continue;` 改成 `if (days > 2 || days < 0) continue;`

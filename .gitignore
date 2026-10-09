@@ -6,3 +6,4 @@ node_modules/
 # 安全审计产物：含漏洞细节，不入公开仓库（仅本地保留）
 AUDIT-REPORT.md
 audit/
+AGENTS.md
