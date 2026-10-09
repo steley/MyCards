@@ -45,6 +45,7 @@ async function sendMail(env: Env['Bindings'], subject: string, text: string): Pr
     AccountName: env.DM_FROM,
     FromAlias: '信用卡管家',
     AddressType: '1',
+    ReplyToAddress: 'false',
     ToAddress: env.MAIL_TO,
     Subject: subject,
     TextBody: text,
