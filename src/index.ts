@@ -6,6 +6,7 @@ import { clearCookie, sessionCookie, sessionExp, verifyPassword, verifySessionCo
 import { cardRoutes } from './routes/cards';
 import { billRoutes } from './routes/bills';
 import { statRoutes } from './routes/stats';
+import { sendReminders } from './notify';
 
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
 
@@ -75,4 +76,9 @@ app.route('/api', cardRoutes);
 app.route('/api', billRoutes);
 app.route('/api', statRoutes);
 
-export default app;
+export default {
+  fetch: app.fetch,
+  // Cron Triggers 入口：Worker 内部触发，不走 HTTP，无需鉴权端点
+  scheduled: (event: ScheduledController, env: Env['Bindings'], ctx: ExecutionContext) =>
+    ctx.waitUntil(sendReminders(env)),
+};

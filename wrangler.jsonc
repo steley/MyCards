@@ -7,7 +7,9 @@
 	"assets": {
 		"directory": "./public",
 		"run_worker_first": [
-			"/api/*"
+			"/api/*",
+			// 本地 --test-scheduled 的触发端点（生产 cron 不走 HTTP，仅本地测试用）
+			"/__scheduled"
 		],
 		"not_found_handling": "single-page-application"
 	},
@@ -22,6 +24,11 @@
 			"database_id": "8882cfc4-5eaf-4dcb-bf16-6d379953e4ce"
 		}
 	],
+
+	// 还款提醒：UTC 0 点 / 12 点 = 北京时间 8 点 / 20 点，每天推两次
+	"triggers": {
+		"crons": ["0 0 * * *", "0 12 * * *"]
+	},
 
 	"observability": {
 		"enabled": true,
