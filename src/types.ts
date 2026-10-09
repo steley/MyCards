@@ -3,7 +3,10 @@ export type Env = {
     DB: D1Database;
     AUTH_PASSWORD: string;
     TZ_OFFSET?: string;
-    SENDKEY?: string;
+    DM_ACCESS_KEY_ID?: string;
+    DM_ACCESS_KEY_SECRET?: string;
+    DM_FROM?: string;
+    MAIL_TO?: string;
     CRON_TOKEN?: string;
   };
 };

@@ -8,7 +8,7 @@
 - **月账单录入**：每卡每月一条账单金额，自动保存，月份可直接选择、标记已还/部分还款
 - **年月统计**：12 个月柱状图、年度合计、各卡年度占比与月均
 - **还款提醒**：仪表盘自动列出 7 天内到期与逾期账单（倒计时配色），标签页标题显示角标；只有未结清的账单会提醒
-- **微信推送提醒**：每天北京时间 8 点、20 点，把还款日前 2 天内与逾期的未还账单经 Server酱 推到微信，无需打开网页
+- **微信推送提醒**：每天北京时间 8 点、20 点，把还款日前 2 天内与逾期的未还账单发到邮箱（QQ 邮箱绑定微信/QQ 即为推送通知），无需打开网页
 - **数据备份**：一键导出全量 CSV（含 BOM，Excel 直接打开不乱码）
 - **PWA**：可「添加到主屏幕」像 App 一样全屏使用；静态资源离线缓存、秒开；断网时显示离线提示（数据始终以服务端为准，接口不缓存）
 - 密码登录（HMAC 签名 Cookie，30 天有效、自动续期）、深色模式、手机端适配
@@ -49,37 +49,48 @@ npm run dev             # 启动 http://localhost:8787
 |---|---|---|
 | 访问密码 | `wrangler secret put AUTH_PASSWORD` | 线上密码；本地开发在 `.dev.vars` |
 | 时区 | `wrangler.jsonc` 的 `vars.TZ_OFFSET` | 「今天/本月」按此时区计算，默认北京时间 `8` |
-| Server酱 SendKey | `wrangler secret put SENDKEY`；本地在 `.dev.vars` | 微信推送用的 key，见下节 |
+| 阿里云邮件推送 | `wrangler secret put` 4 项，见下节 | DirectMail 凭据与收发件地址，全部走 secret 不入仓库 |
 | 定时触发 token | `wrangler secret put CRON_TOKEN` + GitHub 仓库 secret | 保护 `/api/cron`，两边必须是同一个值，见下节 |
 
-## 还款提醒推送（微信）
+## 还款提醒推送（邮箱）
 
-每天北京时间 8 点、20 点，GitHub Actions 定时调用 Worker 的 `/api/cron`，把**还款日前 2 天、前 1 天、当天到期**以及**逾期未还**的账单合并成一条消息，经 [Server酱](https://sct.ftqq.com) 推到微信；没有临期账单则不发。标记「已还」后自动停止。
+每天北京时间 8 点、20 点，GitHub Actions 定时调用 Worker 的 `/api/cron`，把**还款日前 2 天、前 1 天、当天到期**以及**逾期未还**的账单合并成一封邮件，经[阿里云邮件推送 DirectMail](https://www.aliyun.com/product/directmail) 发到你的邮箱；QQ 邮箱开启新邮件提醒后即为微信/QQ 通知。没有临期账单则不发。标记「已还」后自动停止。
 
-首次配置（3 步）：
+首次配置（5 步）：
 
 ```bash
-# 1. 微信扫码登录 https://sct.ftqq.com ，复制 SendKey（SCT 开头），存入 Cloudflare
-npx wrangler secret put SENDKEY
+# 1. 开通 DirectMail（选 cn-hangzhou 区域，代码里写死了该区域端点），
+#    在「发信地址」里新建并验证一个发信地址，如 notify@你的域名
+#    （需先在 Cloudflare DNS 加上它要求的 SPF/DKIM 记录）
 
-# 2. 生成一个随机 token（保持两处一致）
+# 2. 创建 RAM 子账号（重要：不要用主账号 AK！），只授予 AliyunDirectMailFullAccess 权限，
+#    拿到 AccessKey ID / Secret，然后：
+npx wrangler secret put DM_ACCESS_KEY_ID
+npx wrangler secret put DM_ACCESS_KEY_SECRET
+
+# 3. 发信地址与收件邮箱（QQ 邮箱）也走 secret，不进仓库：
+npx wrangler secret put DM_FROM    # notify@你的域名
+npx wrangler secret put MAIL_TO    # 你的QQ号@qq.com
+
+# 4. 定时触发 token（保持两处一致）
 openssl rand -hex 32
-npx wrangler secret put CRON_TOKEN   # 提示输入时粘贴上面的值
+npx wrangler secret put CRON_TOKEN
 
-# 3. 把两个值配到 GitHub 仓库：Settings → Secrets and variables → Actions → New repository secret
+# 5. GitHub 仓库 Secrets（Settings → Secrets and variables → Actions）：
 #    CRON_TOKEN = 上面的随机 token
-#    SITE_URL   = 生产地址 https://mycards.<你的子域>.workers.dev （结尾不带斜杠）
+#    SITE_URL   = 生产地址（结尾不带斜杠）
 ```
 
-装有 `gh` CLI 的话，第 3 步可在仓库目录下用 `gh secret set CRON_TOKEN` / `gh secret set SITE_URL` 代替。
+装有 `gh` CLI 的话，GitHub 侧可用 `gh secret set <名字>` 代替网页操作。
 
-验证：仓库 **Actions → Notify → Run workflow** 手动触发一次，步骤输出 `{"ok":true}` 即链路正常（无临期账单时不会有微信消息，属正常）。
+验证：仓库 **Actions → Notify → Run workflow** 手动触发一次，步骤输出 `{"ok":true}` 即链路正常（无临期账单时不会收到邮件，属正常）。
 
 注意事项：
 
 - GitHub 定时任务在高峰期可能延迟几分钟，属官方已知行为
 - 仓库 **60 天无任何活动** GitHub 会自动停用定时任务并发邮件提醒，访问仓库重新启用即可
-- 不想推送逾期账单的话，把 `src/notify.ts` 里的 `if (days > 2) continue;` 改成 `if (days > 2 || days < 0) continue;`
+- 不想发逾期账单的话，把 `src/notify.ts` 里的 `if (days > 2) continue;` 改成 `if (days > 2 || days < 0) continue;`
+- DirectMail 免费额度每天 200 封，本用途每天最多 2 封，绰绰有余
 
 ## 数据备份与恢复
 
@@ -116,7 +127,7 @@ mycards/
 ├── src/
 │   ├── index.ts          # Hono 应用、登录/会话、/api/cron、路由挂载
 │   ├── auth.ts           # Cookie 签发与校验
-│   ├── notify.ts         # Server酱 推送（查询临期账单、拼消息）
+│   ├── notify.ts         # DirectMail 提醒邮件（查询临期账单、签名发送）
 │   ├── util.ts           # 还款日推算、金额/日期工具
 │   └── routes/
 │       ├── cards.ts      # 卡片 CRUD（删除=归档）
