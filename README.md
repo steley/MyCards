@@ -8,6 +8,7 @@
 - **月账单录入**：每卡每月一条账单金额，自动保存，月份可直接选择、标记已还/部分还款
 - **年月统计**：12 个月柱状图、年度合计、各卡年度占比与月均
 - **还款提醒**：仪表盘自动列出 7 天内到期与逾期账单（倒计时配色），标签页标题显示角标；只有未结清的账单会提醒
+- **微信推送提醒**：每天北京时间 8 点、20 点，把还款日前 2 天内与逾期的未还账单经 Server酱 推到微信，无需打开网页
 - **数据备份**：一键导出全量 CSV（含 BOM，Excel 直接打开不乱码）
 - **PWA**：可「添加到主屏幕」像 App 一样全屏使用；静态资源离线缓存、秒开；断网时显示离线提示（数据始终以服务端为准，接口不缓存）
 - 密码登录（HMAC 签名 Cookie，30 天有效、自动续期）、深色模式、手机端适配
@@ -48,6 +49,37 @@ npm run dev             # 启动 http://localhost:8787
 |---|---|---|
 | 访问密码 | `wrangler secret put AUTH_PASSWORD` | 线上密码；本地开发在 `.dev.vars` |
 | 时区 | `wrangler.jsonc` 的 `vars.TZ_OFFSET` | 「今天/本月」按此时区计算，默认北京时间 `8` |
+| Server酱 SendKey | `wrangler secret put SENDKEY`；本地在 `.dev.vars` | 微信推送用的 key，见下节 |
+| 定时触发 token | `wrangler secret put CRON_TOKEN` + GitHub 仓库 secret | 保护 `/api/cron`，两边必须是同一个值，见下节 |
+
+## 还款提醒推送（微信）
+
+每天北京时间 8 点、20 点，GitHub Actions 定时调用 Worker 的 `/api/cron`，把**还款日前 2 天、前 1 天、当天到期**以及**逾期未还**的账单合并成一条消息，经 [Server酱](https://sct.ftqq.com) 推到微信；没有临期账单则不发。标记「已还」后自动停止。
+
+首次配置（3 步）：
+
+```bash
+# 1. 微信扫码登录 https://sct.ftqq.com ，复制 SendKey（SCT 开头），存入 Cloudflare
+npx wrangler secret put SENDKEY
+
+# 2. 生成一个随机 token（保持两处一致）
+openssl rand -hex 32
+npx wrangler secret put CRON_TOKEN   # 提示输入时粘贴上面的值
+
+# 3. 把两个值配到 GitHub 仓库：Settings → Secrets and variables → Actions → New repository secret
+#    CRON_TOKEN = 上面的随机 token
+#    SITE_URL   = 生产地址 https://mycards.<你的子域>.workers.dev （结尾不带斜杠）
+```
+
+装有 `gh` CLI 的话，第 3 步可在仓库目录下用 `gh secret set CRON_TOKEN` / `gh secret set SITE_URL` 代替。
+
+验证：仓库 **Actions → Notify → Run workflow** 手动触发一次，步骤输出 `{"ok":true}` 即链路正常（无临期账单时不会有微信消息，属正常）。
+
+注意事项：
+
+- GitHub 定时任务在高峰期可能延迟几分钟，属官方已知行为
+- 仓库 **60 天无任何活动** GitHub 会自动停用定时任务并发邮件提醒，访问仓库重新启用即可
+- 不想推送逾期账单的话，把 `src/notify.ts` 里的 `if (days > 2) continue;` 改成 `if (days > 2 || days < 0) continue;`
 
 ## 数据备份与恢复
 
@@ -67,7 +99,7 @@ Service Worker 会把静态资源缓存到浏览器本地，用户拿到新版�
 
 ## 安全说明
 
-- 所有 `/api` 接口都需要登录；密码以 Cloudflare Secret 形式存储，不会出现在代码或配置里
+- 除 `/api/cron`（用独立 token 鉴权，供 GitHub Actions 定时触发）外，所有 `/api` 接口都需要登录；密码以 Cloudflare Secret 形式存储，不会出现在代码或配置里
 - 会话 Cookie 为 HMAC-SHA256 签名（密钥经 HKDF 从密码派生），HttpOnly + Secure + SameSite=Lax，30 天有效，访问时不足 15 天自动续期
 - 登录失败限速：同 IP 5 次失败锁 15 分钟；CSV 导出已中和公式注入前缀；删卡判断已原子化
 - 若想更强保护，可在 Cloudflare 控制台为该域名叠加 [Zero Trust Access](https://developers.cloudflare.com/cloudflare-one/policies/access/)（免费），应用层密码可保留作第二道防线
@@ -78,9 +110,13 @@ Service Worker 会把静态资源缓存到浏览器本地，用户拿到新版�
 mycards/
 ├── wrangler.jsonc        # Workers 配置（D1 绑定、静态资源、时区）
 ├── schema.sql            # 数据表
+├── .github/workflows/
+│   ├── ci.yml            # push 时类型检查
+│   └── notify.yml        # 每天 8/20 点（北京）触发还款提醒推送
 ├── src/
-│   ├── index.ts          # Hono 应用、登录/会话、路由挂载
+│   ├── index.ts          # Hono 应用、登录/会话、/api/cron、路由挂载
 │   ├── auth.ts           # Cookie 签发与校验
+│   ├── notify.ts         # Server酱 推送（查询临期账单、拼消息）
 │   ├── util.ts           # 还款日推算、金额/日期工具
 │   └── routes/
 │       ├── cards.ts      # 卡片 CRUD（删除=归档）
