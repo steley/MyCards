@@ -10,6 +10,15 @@ import { sendReminders } from './notify';
 
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
 
+// 定时提醒入口：GitHub Actions 打这里（.github/workflows/notify.yml）。
+// 必须注册在会话中间件之前——Hono 按注册顺序匹配，先命中即返回，不经过下面的登录校验。
+app.post('/api/cron', async (c) => {
+  if (!c.env.CRON_TOKEN || c.req.header('Authorization') !== `Bearer ${c.env.CRON_TOKEN}`)
+    return c.json({ error: 'forbidden' }, 403);
+  await sendReminders(c.env);
+  return c.json({ ok: true });
+});
+
 // 除登录外，全部 /api 需要有效会话
 app.use('/api/*', async (c, next) => {
   if (c.req.path === '/api/login') return next();
@@ -76,9 +85,4 @@ app.route('/api', cardRoutes);
 app.route('/api', billRoutes);
 app.route('/api', statRoutes);
 
-export default {
-  fetch: app.fetch,
-  // Cron Triggers 入口：Worker 内部触发，不走 HTTP，无需鉴权端点
-  scheduled: (event: ScheduledController, env: Env['Bindings'], ctx: ExecutionContext) =>
-    ctx.waitUntil(sendReminders(env)),
-};
+export default app;

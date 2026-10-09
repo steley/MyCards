@@ -7,9 +7,7 @@
 	"assets": {
 		"directory": "./public",
 		"run_worker_first": [
-			"/api/*",
-			// 本地 --test-scheduled 的触发端点（生产 cron 不走 HTTP，仅本地测试用）
-			"/__scheduled"
+			"/api/*"
 		],
 		"not_found_handling": "single-page-application"
 	},
@@ -25,11 +23,9 @@
 		}
 	],
 
-	// 还款提醒：UTC 0 点 / 12 点 = 北京时间 8 点 / 20 点，每天推两次
-	"triggers": {
-		"crons": ["0 0 * * *", "0 12 * * *"]
-	},
-
+	// 定时提醒改由 GitHub Actions 触发（见 .github/workflows/notify.yml）：
+	// 本账号已用满免费版 5 个 cron trigger 限额，wrangler 部署时会自动清理残留的 schedules
+	
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 1,

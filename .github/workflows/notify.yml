@@ -1,0 +1,22 @@
+name: Notify
+
+on:
+  schedule:
+    # UTC 0 点 / 12 点 = 北京时间 8 点 / 20 点；GitHub 高峰期可能延迟若干分钟
+    - cron: '0 0 * * *'
+    - cron: '0 12 * * *'
+  workflow_dispatch: # 手动触发，便于验证
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 触发还款提醒推送
+        run: |
+          code=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_TOKEN }}" \
+            "$SITE_URL/api/cron")
+          cat /tmp/resp.json; echo
+          test "$code" = 200
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}

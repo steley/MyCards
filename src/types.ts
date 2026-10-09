@@ -4,6 +4,7 @@ export type Env = {
     AUTH_PASSWORD: string;
     TZ_OFFSET?: string;
     SENDKEY?: string;
+    CRON_TOKEN?: string;
   };
 };
 
