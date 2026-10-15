@@ -39,7 +39,12 @@ export function computeDueDate(card: CardRow, period: string, override: string |
     return billing.toISOString().slice(0, 10);
   }
   if (card.due_day != null) {
-    return `${period}-${pad2(Math.min(card.due_day, daysInMonth(year, month)))}`;
+    // 还款日若早于等于本期账单日（如账单日 15 / 还款日 2），实际落在下个自然月
+    const nextMonth = card.billing_day != null && card.due_day <= card.billing_day;
+    const m = month - 1 + (nextMonth ? 1 : 0);
+    const y = year + Math.floor(m / 12);
+    const mo = (m % 12) + 1;
+    return `${y}-${pad2(mo)}-${pad2(Math.min(card.due_day, daysInMonth(y, mo)))}`;
   }
   return null;
 }
