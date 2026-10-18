@@ -65,9 +65,13 @@ async function sendMail(env: Env['Bindings'], subject: string, text: string): Pr
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(toSign));
   const signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
 
+  // 发送失败必须抛错，让 /api/cron 返回非 200、GitHub Actions 显示红叉报警；
+  // 若只 console.error，定时任务会一直显示成功，发信失败无感知。
   const res = await fetch('https://dm.aliyuncs.com/', {
     method: 'POST',
     body: new URLSearchParams({ ...params, Signature: signature }),
   });
-  if (!res.ok) console.error('DirectMail 发送失败', res.status, await res.text());
+  if (!res.ok) {
+    throw new Error(`DirectMail 发送失败 HTTP ${res.status}: ${await res.text()}`);
+  }
 }
